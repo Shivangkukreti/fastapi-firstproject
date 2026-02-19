@@ -1,6 +1,6 @@
-from fastapi import FastAPI,File, Form,UploadFile,HTTPException
+from fastapi import FastAPI,File, Form,UploadFile,HTTPException,Depends
 from db.data_base import fruits_collection,students_collection,user_collection
-from util.auth import create_access_token,decode_access_token,get_password_hash,verify_password
+from util.auth import create_access_token,get_password_hash,verify_password,get_current_user
 from bson import ObjectId
 from db.db_model import Fruit,Student,pfp,User,Userlogin,Token,userout
 from util.image import imagekit
@@ -137,7 +137,7 @@ async def up(name:str=Form(...),img:UploadFile=File(...)):
         await students_collection.insert_one(x.model_dump())
         return x
     except Exception as e:
-        return {"REAL_ERROR": str(e)}
+        raise HTTPException(status_code=500,detail=str(e))
     
 
 # ----------------------------------------------------------------------------
@@ -154,10 +154,10 @@ async def signup(data:User):
         any=data.model_dump()
         any['password']=hashed_pass
         x=await user_collection.insert_one(any)
-        token=create_access_token({"user_id":str(x.inserted_id)})
+        token=create_access_token({"email":any['email']})
         return {"message":"User created successfully","token":token}
     except Exception as e:
-        return {"REAL_ERROR": str(e)}
+        raise HTTPException(status_code=500,detail=str(e))
 
 
 @app.post('/login',response_model=Token)
@@ -168,9 +168,17 @@ async def login(data:Userlogin):
             raise HTTPException(status_code=401,detail="Invalid credentials")
         if not verify_password(data.password,user['password']):
             raise HTTPException(status_code=401,detail="Invalid credentials")
-        token=create_access_token({"user_id":str(user['_id'])})
-        return {"access_token":token,"token_type":"bearer"}
+        token=create_access_token({"email":user['email']})
+        return {"access_token":token,"token_type":"Bearer"}
     except Exception as e:
        raise HTTPException(status_code=500,detail=str(e))
+    
+
+@app.get('/me',response_model=userout)
+async def me(current_user: dict = Depends(get_current_user)):
+    try:
+        return {"username":current_user['username'],"email":current_user['email']}
+    except Exception as e:
+        raise HTTPException(status_code=500,detail=str(e))
     
 
