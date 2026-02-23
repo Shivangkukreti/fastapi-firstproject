@@ -144,16 +144,16 @@ async def up(name:str=Form(...),img:UploadFile=File(...)):
 
 
 
-@app.post('/signup')
+@app.post('/signup',response_model=Token)
 async def signup(data:User):
     try:
         existing_user=await user_collection.find_one({"email":data.email})
         if existing_user:
-            return {"message":"User already exists"}
+           raise HTTPException(status_code=400,detail="Email already registered")
         hashed_pass=get_password_hash(data.password)
         any=data.model_dump()
         any['password']=hashed_pass
-        x=await user_collection.insert_one(any)
+        await user_collection.insert_one(any)
         token=create_access_token({"email":any['email']})
         return {"message":"User created successfully","token":token}
     except Exception as e:
@@ -169,7 +169,7 @@ async def login(data:Userlogin):
         if not verify_password(data.password,user['password']):
             raise HTTPException(status_code=401,detail="Invalid credentials")
         token=create_access_token({"email":user['email']})
-        return {"access_token":token,"token_type":"Bearer"}
+        return {"access_token":token,"message":"user logged in successfully"}
     except Exception as e:
        raise HTTPException(status_code=500,detail=str(e))
     
@@ -177,7 +177,7 @@ async def login(data:Userlogin):
 @app.get('/me',response_model=userout)
 async def me(current_user: dict = Depends(get_current_user)):
     try:
-        return {"username":current_user['username'],"email":current_user['email']}
+        return current_user
     except Exception as e:
         raise HTTPException(status_code=500,detail=str(e))
     
